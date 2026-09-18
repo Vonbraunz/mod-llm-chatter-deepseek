@@ -237,6 +237,48 @@ def test_quick_ollama_uses_compatible_request_layer():
     assert request['messages'][1]['content'] == '/no_think User task'
 
 
+def _deepseek_config():
+    return {
+        'LLMChatter.Provider': 'deepseek',
+        'LLMChatter.Model': 'deepseek-flash',
+        'LLMChatter.DeepSeek.DisableThinking': '1',
+        'LLMChatter.MaxTokens': 100,
+        'LLMChatter.Temperature': 0.7,
+    }
+
+
+# DeepSeek thinks by default, so the toggle must be sent to turn it off.
+# reasoning_effort is deliberately never sent: it only takes low/high/max
+# here, and a rejected "none" would be read as "model forces reasoning"
+# and permanently drop temperature for the process.
+def test_deepseek_disables_thinking_via_toggle():
+    request = _run_call(_deepseek_config())
+    assert request['max_tokens'] == 100
+    assert request['temperature'] == 0.7
+    assert request['extra_body'] == {
+        'thinking': {'type': 'disabled'},
+    }
+    assert 'reasoning_effort' not in request
+
+
+def test_quick_deepseek_disables_thinking_via_toggle():
+    request = _run_quick_call(_deepseek_config())
+    assert request['max_tokens'] == 50
+    assert request['temperature'] == 0.1
+    assert request['extra_body'] == {
+        'thinking': {'type': 'disabled'},
+    }
+    assert 'reasoning_effort' not in request
+
+
+def test_deepseek_thinking_can_stay_enabled():
+    config = _deepseek_config()
+    config['LLMChatter.DeepSeek.DisableThinking'] = '0'
+    request = _run_call(config)
+    assert 'extra_body' not in request
+    assert 'reasoning_effort' not in request
+
+
 def test_health_probe_uses_production_google_options():
     client = _Client()
     config = {
@@ -265,6 +307,9 @@ def main() -> int:
     test_openai_unsupported_none_uses_default_reasoning_budget()
     test_ollama_uses_compatible_request_layer()
     test_quick_ollama_uses_compatible_request_layer()
+    test_deepseek_disables_thinking_via_toggle()
+    test_quick_deepseek_disables_thinking_via_toggle()
+    test_deepseek_thinking_can_stay_enabled()
     test_health_probe_uses_production_google_options()
     print('OK')
     return 0

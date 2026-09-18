@@ -32,6 +32,7 @@ from chatter_mode import (
 from chatter_constants import PERSONALITY_TRAITS
 from chatter_constants import GOOGLE_OPENAI_BASE_URL
 from chatter_constants import OPENROUTER_BASE_URL
+from chatter_constants import DEEPSEEK_BASE_URL
 from chatter_db import mark_event
 
 logger = logging.getLogger(__name__)
@@ -481,6 +482,17 @@ def _generate_bot_tone(
             if headers:
                 kwargs['default_headers'] = headers
             client = _openai.OpenAI(**kwargs)
+        elif provider == 'deepseek':
+            import openai as _openai
+            client = _openai.OpenAI(
+                api_key=config.get(
+                    'LLMChatter.DeepSeek.ApiKey', ''
+                ),
+                base_url=config.get(
+                    'LLMChatter.DeepSeek.BaseUrl',
+                    DEEPSEEK_BASE_URL,
+                ),
+            )
         else:
             import anthropic as _anthropic
             client = _anthropic.Anthropic(
@@ -710,6 +722,17 @@ def _generate_bot_backstory(
             if headers:
                 kwargs['default_headers'] = headers
             client = _openai.OpenAI(**kwargs)
+        elif provider == 'deepseek':
+            import openai as _openai
+            client = _openai.OpenAI(
+                api_key=config.get(
+                    'LLMChatter.DeepSeek.ApiKey', ''
+                ),
+                base_url=config.get(
+                    'LLMChatter.DeepSeek.BaseUrl',
+                    DEEPSEEK_BASE_URL,
+                ),
+            )
         else:
             import anthropic as _anthropic
             client = _anthropic.Anthropic(

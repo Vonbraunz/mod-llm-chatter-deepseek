@@ -331,9 +331,10 @@ It carries two extra attributes:
    - **Anthropic**: native `system=` parameter + user message;
      sampling temperature is sent through `extra_body` for Anthropic
      SDK v1 compatibility
-   - **OpenAI / Google / OpenRouter / Ollama**: system role message +
-     user role message; `llm_compat.py` selects the token field and
-     optional parameters from a conservative model capability profile
+   - **OpenAI / Google / OpenRouter / DeepSeek / Ollama**: system role
+     message + user role message; `llm_compat.py` selects the token
+     field and optional parameters from a conservative model
+     capability profile
    - **Modern OpenAI reasoning models**: use
      `max_completion_tokens`, coordinate temperature with reasoning
      effort, and apply `LLMChatter.OpenAI.ReasoningEffort` only when
@@ -351,6 +352,14 @@ It carries two extra attributes:
      OpenAI-compatible endpoint has no per-request context parameter;
      disabling thinking sends `reasoning_effort = none` and retains the
      `/no_think` prompt fallback
+   - **DeepSeek**: models think by default, so
+     `LLMChatter.DeepSeek.DisableThinking` sends
+     `thinking = {"type": "disabled"}` through `extra_body`.
+     `reasoning_effort` is never sent: on DeepSeek it takes
+     `low/high/max` and tunes reasoning depth rather than disabling it,
+     and a rejected `none` would be read by
+     `_adjust_rejected_parameters()` as a model forcing default
+     reasoning, permanently caching `omit_temperature` for the process
 4. If a plain string is passed instead of `PromptParts`, the entire
    string is sent as a single user message (backward compatibility).
 
@@ -669,7 +678,7 @@ This asymmetry is known and acceptable in the shipped source state.
 | `tools/llm_compat.py` | Declarative OpenAI-compatible model capability profiles plus narrowly scoped parameter-rejection recovery and process-local learned overrides |
 | `tools/chatter_mode.py` | Canonical normal/RP playerbot identity and channel voice rules, plus mode-invariant NPC guidance |
 | `tools/chatter_text.py` | Parsing, sanitization, anti-repetition, and chat length limiting. Never slice LLM chat output by hand; use `shorten_chat_message()` or `shorten_chat_question()` from this file. |
-| `tools/chatter_llm.py` | Provider/model calls for Anthropic, OpenAI, Google Gemini, OpenRouter, and Ollama; `get_llm_client()` shared client factory; `_split_prompt()`, `_build_chat_messages()`, `_ollama_user_msg()`, `_apply_google_options()`, `_apply_openrouter_options()`, `_openrouter_headers()` for system/user prompt separation and provider tuning; delegates cross-model parameter selection to `llm_compat.py`; `label=` param logs every call via `chatter_request_logger` |
+| `tools/chatter_llm.py` | Provider/model calls for Anthropic, OpenAI, Google Gemini, OpenRouter, DeepSeek, and Ollama; `get_llm_client()` shared client factory; `_split_prompt()`, `_build_chat_messages()`, `_ollama_user_msg()`, `_apply_google_options()`, `_apply_openrouter_options()`, `_openrouter_headers()` for system/user prompt separation and provider tuning; delegates cross-model parameter selection to `llm_compat.py`; `label=` param logs every call via `chatter_request_logger` |
 | `tools/chatter_db.py` | DB access, inserts, zone/cache queries, `any_real_players_online()`, stale-group cleanup, and global group/Guild session cleanup |
 | `tools/chatter_links.py` | WoW link parsing and prompt-side link enrichment for player messages |
 | `tools/chatter_prompts.py` | Ambient/event prompt builders |
@@ -685,7 +694,7 @@ This asymmetry is known and acceptable in the shipped source state.
 
 | File | Primary ownership |
 |---|---|
-| `tools/screenshot_agent.py` | Host-side capture agent (runs outside Docker). Captures WoW window via Win32 API, crops UI clutter (bottom 20%, sides 12%), sends JPEG to vision LLM (OpenAI, Anthropic, Google, or OpenRouter), receives structured JSON with environment description, atmosphere, and canonical tags. Queues `bot_group_screenshot_observation` events directly into `llm_chatter_events`. Configurable interval, chance, and vision provider/model |
+| `tools/screenshot_agent.py` | Host-side capture agent (runs outside Docker). Captures WoW window via Win32 API, crops UI clutter (bottom 20%, sides 12%), sends JPEG to vision LLM (OpenAI, Anthropic, Google, OpenRouter, or DeepSeek), receives structured JSON with environment description, atmosphere, and canonical tags. Queues `bot_group_screenshot_observation` events directly into `llm_chatter_events`. Configurable interval, chance, and vision provider/model |
 | `tools/chatter_screenshot_handler.py` | Bridge handler for `bot_group_screenshot_observation` events. Generates in-character bot comments using personality traits, zone/subzone context, and the vision description. Supports single statements via `run_single_reaction()` and multi-bot conversations via `append_conversation_json_instruction()` / `parse_conversation_response()`. Canonical tag dedup prevents repetitive observations |
 
 ### Development tools

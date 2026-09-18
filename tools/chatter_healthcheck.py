@@ -39,7 +39,9 @@ import os
 import sys
 
 from chatter_constants import (
+    DEEPSEEK_BASE_URL,
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_GOOGLE_MODEL,
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OPENROUTER_MODEL,
@@ -66,7 +68,8 @@ _REQUIRED_TABLES = [
 ]
 
 _VALID_PROVIDERS = (
-    'anthropic', 'openai', 'google', 'openrouter', 'ollama'
+    'anthropic', 'openai', 'google', 'openrouter', 'ollama',
+    'deepseek',
 )
 
 # provider -> (api_key_config_key, example_placeholder)
@@ -77,6 +80,7 @@ _PROVIDER_KEYS = {
     'openrouter': (
         'LLMChatter.OpenRouter.ApiKey', 'sk-or-v1-xxxxx'
     ),
+    'deepseek': ('LLMChatter.DeepSeek.ApiKey', 'sk-xxxxx'),
 }
 
 
@@ -121,6 +125,8 @@ def format_llm_target(config):
         default_model = DEFAULT_GOOGLE_MODEL
     elif provider == 'openrouter':
         default_model = DEFAULT_OPENROUTER_MODEL
+    elif provider == 'deepseek':
+        default_model = DEFAULT_DEEPSEEK_MODEL
     model = config.get('LLMChatter.Model', default_model)
 
     if provider == 'ollama':
@@ -139,6 +145,11 @@ def format_llm_target(config):
             'LLMChatter.OpenRouter.BaseUrl', OPENROUTER_BASE_URL
         )
         return f"openrouter {model} @ {base_url}"
+    if provider == 'deepseek':
+        base_url = config.get(
+            'LLMChatter.DeepSeek.BaseUrl', DEEPSEEK_BASE_URL
+        )
+        return f"deepseek {model} @ {base_url}"
     return f"{provider} {model}"
 
 
@@ -151,6 +162,8 @@ def _resolved_model(config, provider):
         default_model = DEFAULT_GOOGLE_MODEL
     elif provider == 'openrouter':
         default_model = DEFAULT_OPENROUTER_MODEL
+    elif provider == 'deepseek':
+        default_model = DEFAULT_DEEPSEEK_MODEL
     model = config.get('LLMChatter.Model', default_model)
     try:
         from chatter_llm import resolve_model
@@ -561,6 +574,13 @@ def _build_openai_compatible_client(config, provider):
                 'LLMChatter.Google.BaseUrl', GOOGLE_OPENAI_BASE_URL
             ),
         )
+    if provider == 'deepseek':
+        return openai.OpenAI(
+            api_key=config.get('LLMChatter.DeepSeek.ApiKey', ''),
+            base_url=config.get(
+                'LLMChatter.DeepSeek.BaseUrl', DEEPSEEK_BASE_URL
+            ),
+        )
     # openrouter
     kwargs = {
         'api_key': config.get('LLMChatter.OpenRouter.ApiKey', ''),
@@ -592,6 +612,10 @@ def _check_llm_probe(config):
     elif provider == 'openrouter':
         endpoint = config.get(
             'LLMChatter.OpenRouter.BaseUrl', OPENROUTER_BASE_URL
+        )
+    elif provider == 'deepseek':
+        endpoint = config.get(
+            'LLMChatter.DeepSeek.BaseUrl', DEEPSEEK_BASE_URL
         )
     else:
         endpoint = "the provider API"

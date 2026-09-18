@@ -1,5 +1,26 @@
 # Changelog
 
+### 2026-09-17 - DeepSeek Provider Support
+
+* **Direct DeepSeek API**: Added `deepseek` as a first-class
+  `LLMChatter.Provider` value, calling DeepSeek's own OpenAI-compatible
+  endpoint directly rather than through OpenRouter or Ollama. Configured
+  through `LLMChatter.DeepSeek.ApiKey` and `LLMChatter.DeepSeek.BaseUrl`.
+* **Thinking disabled by default**: DeepSeek models think by default, so
+  `LLMChatter.DeepSeek.DisableThinking` (default 1) sends
+  `thinking = {"type": "disabled"}` on chatter and screenshot requests.
+  `reasoning_effort` is never sent to DeepSeek: there it takes
+  `low/high/max` and tunes reasoning depth rather than disabling it, and
+  a rejected `none` would be read as a model forcing default reasoning,
+  permanently dropping `temperature` and flattening chatter variety.
+* **Consistent call paths**: Main chatter calls, quick analysis, startup
+  health checks, and bot tone/backstory generation all recognize the new
+  provider through the shared compatibility layer.
+* **Screenshot vision support**: `LLMChatter.Screenshot.VisionProvider`
+  now accepts `deepseek`, using DeepSeek Flash V4's vision capability
+  through the same OpenAI-compatible image-analysis path as OpenAI,
+  Google, and OpenRouter.
+
 ### 2026-09-15 - Multidirectional NPC Interactions
 
 * **Reliable direct NPC replies**: Eligible ordinary NPCs now receive a

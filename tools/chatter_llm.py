@@ -6,7 +6,9 @@ import time
 from typing import Any, Optional
 
 from chatter_constants import (
+    DEEPSEEK_BASE_URL,
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_GOOGLE_MODEL,
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OPENROUTER_MODEL,
@@ -280,6 +282,18 @@ def build_compatible_chat_request(
         )).strip() == '1'
     ):
         kwargs['reasoning_effort'] = 'none'
+    elif (
+        provider == 'deepseek'
+        and str(config.get(
+            'LLMChatter.DeepSeek.DisableThinking', '1'
+        )).strip() == '1'
+    ):
+        # DeepSeek models think by default, so the toggle is required to
+        # turn it off. Deliberately not reasoning_effort: that parameter
+        # only takes low/high/max here, and a rejected "none" would be
+        # read as "model forces reasoning" and permanently drop
+        # temperature for the rest of the process.
+        kwargs['extra_body'] = {'thinking': {'type': 'disabled'}}
     return kwargs
 
 
@@ -404,6 +418,17 @@ def get_llm_client(config):
             if headers:
                 kwargs['default_headers'] = headers
             _main_client = openai.OpenAI(**kwargs)
+        elif provider == 'deepseek':
+            import openai
+            _main_client = openai.OpenAI(
+                api_key=config.get(
+                    'LLMChatter.DeepSeek.ApiKey', ''
+                ),
+                base_url=config.get(
+                    'LLMChatter.DeepSeek.BaseUrl',
+                    DEEPSEEK_BASE_URL,
+                ),
+            )
         else:
             import anthropic
             _main_client = anthropic.Anthropic(
@@ -441,6 +466,8 @@ def call_llm(
         default_model = DEFAULT_GOOGLE_MODEL
     elif provider == 'openrouter':
         default_model = DEFAULT_OPENROUTER_MODEL
+    elif provider == 'deepseek':
+        default_model = DEFAULT_DEEPSEEK_MODEL
     model = config.get(
         'LLMChatter.Model', default_model
     )
@@ -465,7 +492,8 @@ def call_llm(
                 user_msg, config
             )
         if provider in (
-            'openai', 'google', 'openrouter', 'ollama'
+            'openai', 'google', 'openrouter', 'ollama',
+            'deepseek',
         ):
             kwargs = build_compatible_chat_request(
                 provider,
@@ -625,6 +653,20 @@ def _get_quick_analyze_client(config):
             if headers:
                 kwargs['default_headers'] = headers
             _quick_analyze_client = openai.OpenAI(**kwargs)
+        elif qa_provider == 'deepseek':
+            import openai
+            api_key = config.get(
+                'LLMChatter.DeepSeek.ApiKey', ''
+            )
+            if not api_key:
+                return None, main_provider
+            _quick_analyze_client = openai.OpenAI(
+                api_key=api_key,
+                base_url=config.get(
+                    'LLMChatter.DeepSeek.BaseUrl',
+                    DEEPSEEK_BASE_URL,
+                ),
+            )
         elif qa_provider == 'anthropic':
             import anthropic
             api_key = config.get(
@@ -704,6 +746,14 @@ def quick_llm_analyze(
                 'LLMChatter.Model',
                 DEFAULT_OPENROUTER_MODEL
             )
+    elif provider == 'deepseek':
+        if using_quick_provider:
+            model = DEFAULT_DEEPSEEK_MODEL
+        else:
+            model = config.get(
+                'LLMChatter.Model',
+                DEFAULT_DEEPSEEK_MODEL
+            )
     else:
         # Ollama: use configured model
         model = config.get(
@@ -722,7 +772,8 @@ def quick_llm_analyze(
                 user_msg, config
             )
         if provider in (
-            'openai', 'google', 'openrouter', 'ollama'
+            'openai', 'google', 'openrouter', 'ollama',
+            'deepseek',
         ):
             kwargs = build_compatible_chat_request(
                 provider,

@@ -36,7 +36,7 @@
 #
 #   The module runs best with models that deliver sub-5 second response times.
 #   Any provider that meets this latency target will work well, including:
-#   - Anthropic / OpenAI / Google / OpenRouter cloud APIs
+#   - Anthropic / OpenAI / Google / OpenRouter / DeepSeek cloud APIs
 #   - Ollama cloud-hosted models
 #   - Local inference with very fast hardware (high-end GPU + small model)
 #
@@ -57,6 +57,7 @@
 #   - openai    : GPT models (GPT-4o-mini is recommended for speed and low cost) - cloud, requires API key
 #   - google    : Gemini models (Gemini 3.1 Flash-Lite / 2.5 Flash) - cloud, requires API key
 #   - openrouter: OpenRouter model routing - cloud, requires API key
+#   - deepseek  : DeepSeek models direct from DeepSeek's own API - cloud, requires API key
 #   - ollama    : Local running on very fast hardware or cloud models
 #
 # SETUP INSTRUCTIONS:
@@ -244,6 +245,12 @@ LLMChatter.RequestLog.MaxSizeMB = 50
 #     LLMChatter.Model = openai/gpt-4o-mini
 #     LLMChatter.OpenRouter.ApiKey = sk-or-v1-xxxxx
 #
+#   Cloud (DeepSeek Flash - fast, low-cost, thinking off):
+#     LLMChatter.Provider = deepseek
+#     LLMChatter.Model = deepseek-flash
+#     LLMChatter.DeepSeek.ApiKey = sk-xxxxx
+#     LLMChatter.DeepSeek.DisableThinking = 1
+#
 #   Ollama cloud (fast, pay-per-use via Ollama):
 #     LLMChatter.Provider = ollama
 #     LLMChatter.Model = deepseek-v3.1:671b-cloud
@@ -263,7 +270,7 @@ LLMChatter.RequestLog.MaxSizeMB = 50
 #   LLMChatter.Provider
 #       Which LLM provider to use:
 #       Format: one lowercase name with no quotes.
-#       Values: anthropic, openai, google, openrouter, or ollama
+#       Values: anthropic, openai, google, openrouter, deepseek, or ollama
 #       Default: anthropic
 #
 LLMChatter.Provider = anthropic
@@ -293,6 +300,13 @@ LLMChatter.Provider = anthropic
 #         anthropic/claude-haiku-4.5
 #         openai/gpt-4o-mini
 #         openrouter/auto
+#
+#       DeepSeek models:
+#         deepseek-flash (fast, cheap - recommended, also does vision)
+#         deepseek-v4-pro (higher quality, slower and costlier)
+#         Both think by default; see DisableThinking below.
+#         The legacy name deepseek-v4-flash is still accepted but is
+#         routed to and billed as deepseek-flash.
 #
 #       Ollama models (from 'ollama list'):
 #         qwen3:4b, qwen3:8b, llama3.2:3b
@@ -462,6 +476,44 @@ LLMChatter.OpenRouter.HttpReferer =
 #       Leave empty if you do not want to send this header.
 #
 LLMChatter.OpenRouter.Title =
+
+###############################################################################
+# DEEPSEEK SETTINGS [BRIDGE] (only needed if Provider = deepseek)
+###############################################################################
+#
+# DeepSeek models think by default. Leave DisableThinking = 1 for chatter:
+# hidden reasoning adds latency and can consume the short output budgets
+# these prompts use, producing empty or truncated lines.
+#
+
+#
+#   LLMChatter.DeepSeek.ApiKey
+#       Format: the complete key as one unquoted value (starts with sk-).
+#       Get one at: https://platform.deepseek.com/api_keys
+#
+LLMChatter.DeepSeek.ApiKey =
+
+#
+#   LLMChatter.DeepSeek.BaseUrl
+#       DeepSeek's OpenAI-compatible endpoint.
+#       Format: a complete http:// or https:// URL; normally leave unchanged.
+#       Only change this if DeepSeek changes the compatibility endpoint.
+#
+LLMChatter.DeepSeek.BaseUrl = https://api.deepseek.com
+
+#
+#   LLMChatter.DeepSeek.DisableThinking
+#       Turns DeepSeek's thinking mode off by sending
+#       thinking = {"type": "disabled"} on each request. DeepSeek models
+#       think by default, so leaving this at 1 is what keeps chatter fast
+#       and stops hidden reasoning from eating the output budget.
+#       Set to 0 only if you deliberately want reasoning on every line.
+#       Note this is not reasoning_effort: on DeepSeek that parameter
+#       takes low/high/max and controls how hard it thinks, not whether.
+#       Format: 0 (allow model thinking) or 1 (disable thinking).
+#       Default: 1
+#
+LLMChatter.DeepSeek.DisableThinking = 1
 
 ###############################################################################
 # OLLAMA SETTINGS [BRIDGE] (only needed if Provider = ollama)
@@ -2974,8 +3026,8 @@ LLMChatter.Screenshot.Chance = 40
 #   LLMChatter.Screenshot.VisionProvider
 #       Which AI provider to use for screenshot analysis.
 #       Format: one lowercase name with no quotes.
-#       Values: openai (recommended), anthropic, google, or openrouter.
-#       Ollama is not supported by the screenshot agent.
+#       Values: openai (recommended), anthropic, google, openrouter,
+#       or deepseek. Ollama is not supported by the screenshot agent.
 #       Requires the matching provider API key above.
 #       Default: openai
 #
@@ -2989,7 +3041,8 @@ LLMChatter.Screenshot.VisionProvider = openai
 #       Recommended: gpt-4o-mini (fast and inexpensive)
 #       Alternatives: claude-haiku-4-5-20251001,
 #       gemini-3.1-flash-lite, gemini-2.5-flash,
-#       anthropic/claude-haiku-4.5 (OpenRouter)
+#       anthropic/claude-haiku-4.5 (OpenRouter),
+#       deepseek-flash (DeepSeek)
 #       Default: gpt-4o-mini
 #
 LLMChatter.Screenshot.VisionModel = gpt-4o-mini

@@ -50,6 +50,31 @@ class ScreenshotCompatibilityTests(unittest.TestCase):
         request = operation.call_args.kwargs
         self.assertEqual(request["max_completion_tokens"], 1200)
 
+    def test_deepseek_vision_uses_openai_compatible_shape(self):
+        client, operation = self._client()
+        _call_openai(
+            "image", client, "deepseek-flash",
+            provider="deepseek",
+        )
+        request = operation.call_args.kwargs
+        self.assertEqual(request["model"], "deepseek-flash")
+        self.assertEqual(request["max_tokens"], 300)
+        self.assertNotIn("reasoning_effort", request)
+        image_block = request["messages"][1]["content"][0]
+        self.assertEqual(image_block["type"], "image_url")
+
+    def test_deepseek_vision_disables_thinking(self):
+        client, operation = self._client()
+        _call_openai(
+            "image", client, "deepseek-flash",
+            provider="deepseek",
+        )
+        request = operation.call_args.kwargs
+        self.assertEqual(
+            request["extra_body"],
+            {"thinking": {"type": "disabled"}},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -82,7 +82,7 @@ This module requires a working AzerothCore server with mod-playerbots. If you do
 | AzerothCore | [Playerbot branch](https://github.com/mod-playerbots/azerothcore-wotlk/tree/Playerbot) (WotLK 3.3.5a) |
 | mod-playerbots | [liyunfan1223/mod-playerbots](https://github.com/mod-playerbots/mod-playerbots) |
 | Python | 3.10+ |
-| LLM Provider | Anthropic, OpenAI, Google Gemini, OpenRouter, or Ollama |
+| LLM Provider | Anthropic, OpenAI, Google Gemini, OpenRouter, DeepSeek, or Ollama |
 
 Install the Python bridge dependencies from `tools/requirements.txt`.
 Anthropic deployments use the supported 1.x SDK; installing provider
@@ -104,6 +104,10 @@ Tested extensively with excellent results:
 - **OpenRouter model slugs** such as `anthropic/claude-haiku-4.5`,
   `openai/gpt-4o-mini`, and `openai/gpt-4.1-mini`, useful when users
   want OpenRouter routing while keeping OpenAI-compatible calls
+- **DeepSeek Flash** (DeepSeek), fast and cheap direct from DeepSeek's
+  own API, and vision-capable for the screenshot agent; keep
+  `LLMChatter.DeepSeek.DisableThinking = 1` (default) since DeepSeek
+  models think by default
 
 Ollama is supported for local/free inference, but the module's structured
 JSON, system/user messages, emotes, and actions demand strong instruction
@@ -126,6 +130,7 @@ the chatter parser treats an inline comment as part of the value.
 | OpenAI | `openai` | Exact OpenAI API model ID | `LLMChatter.OpenAI.ApiKey` |
 | Google | `google` | Exact Gemini API model ID | `LLMChatter.Google.ApiKey` |
 | OpenRouter | `openrouter` | A `vendor/model` slug | `LLMChatter.OpenRouter.ApiKey` |
+| DeepSeek | `deepseek` | Exact DeepSeek API model ID | `LLMChatter.DeepSeek.ApiKey` |
 | Ollama | `ollama` | A name/tag from `ollama list` | None |
 
 Ready-to-copy examples (replace only the placeholder key):
@@ -152,6 +157,12 @@ LLMChatter.Google.ApiKey = AIza-xxxxx
 LLMChatter.Provider = openrouter
 LLMChatter.Model = anthropic/claude-haiku-4.5
 LLMChatter.OpenRouter.ApiKey = sk-or-v1-xxxxx
+
+# DeepSeek Flash
+LLMChatter.Provider = deepseek
+LLMChatter.Model = deepseek-flash
+LLMChatter.DeepSeek.ApiKey = sk-xxxxx
+LLMChatter.DeepSeek.DisableThinking = 1
 
 # Local Ollama from a Docker bridge
 LLMChatter.Provider = ollama
@@ -270,7 +281,7 @@ AiPlayerbot.RandomBotSayWithoutMaster = 0
 **1. Configure**
 
 Copy `modules/mod-llm-chatter/conf/mod_llm_chatter.conf.dist` to `env/dist/etc/modules/` and rename it to `mod_llm_chatter.conf`. Open it in a text editor and set at minimum:
-- `LLMChatter.Provider`,  choose `anthropic`, `openai`, `google`, `openrouter`, or `ollama`
+- `LLMChatter.Provider`,  choose `anthropic`, `openai`, `google`, `openrouter`, `deepseek`, or `ollama`
 - `LLMChatter.Model`, using the exact ID format shown in
   [Provider and Model Setup](#provider-and-model-setup)
 - the matching provider API key, for example `LLMChatter.OpenRouter.ApiKey` when using OpenRouter (not needed for Ollama)
@@ -340,7 +351,7 @@ docker compose --profile dev up -d
 **2. Configure**
 
 Copy `conf/mod_llm_chatter.conf.dist` to your server's config directory (typically `etc/modules/`) and rename it to `mod_llm_chatter.conf`. Open it in a text editor and set at minimum:
-- `LLMChatter.Provider`,  choose `anthropic`, `openai`, `google`, `openrouter`, or `ollama`
+- `LLMChatter.Provider`,  choose `anthropic`, `openai`, `google`, `openrouter`, `deepseek`, or `ollama`
 - `LLMChatter.Model`, using the exact ID format shown in
   [Provider and Model Setup](#provider-and-model-setup)
 - the matching provider API key, for example `LLMChatter.OpenRouter.ApiKey` when using OpenRouter (not needed for Ollama)
@@ -435,7 +446,7 @@ LLMChatter.Screenshot.IntervalMaxSeconds = 120
 LLMChatter.Screenshot.Chance = 90
 
 # Which AI to use for analyzing screenshots
-# Options: "openai" (recommended), "anthropic", "google", or "openrouter"
+# Options: "openai" (recommended), "anthropic", "google", "openrouter", or "deepseek"
 LLMChatter.Screenshot.VisionProvider = openai
 
 # Which model to use. GPT-4o-mini is fast and very cheap
@@ -451,7 +462,7 @@ LLMChatter.Screenshot.ConversationChance = 40
 LLMChatter.Screenshot.DBHost = 127.0.0.1
 ```
 
-Make sure your config also has the matching API key set (`LLMChatter.OpenAI.ApiKey`, `LLMChatter.Anthropic.ApiKey`, `LLMChatter.Google.ApiKey`, or `LLMChatter.OpenRouter.ApiKey`).
+Make sure your config also has the matching API key set (`LLMChatter.OpenAI.ApiKey`, `LLMChatter.Anthropic.ApiKey`, `LLMChatter.Google.ApiKey`, `LLMChatter.OpenRouter.ApiKey`, or `LLMChatter.DeepSeek.ApiKey`).
 The screenshot agent uses the same model-aware token-field negotiation as the
 bridge, so direct OpenAI reasoning/vision model IDs do not require a separate
 `max_tokens` workaround.
@@ -706,4 +717,4 @@ GNU AGPL v3, same as AzerothCore.
 ## Credits
 
 - Uses [mod-playerbots](https://github.com/mod-playerbots/mod-playerbots) for bot characters
-- Powered by [Anthropic Claude](https://anthropic.com), [OpenAI GPT](https://openai.com), [Google Gemini](https://ai.google.dev/gemini-api), [OpenRouter](https://openrouter.ai), or [Ollama](https://ollama.ai)
+- Powered by [Anthropic Claude](https://anthropic.com), [OpenAI GPT](https://openai.com), [Google Gemini](https://ai.google.dev/gemini-api), [OpenRouter](https://openrouter.ai), [DeepSeek](https://platform.deepseek.com), or [Ollama](https://ollama.ai)

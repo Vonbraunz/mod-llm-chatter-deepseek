@@ -557,11 +557,13 @@ Supported providers:
 - OpenAI
 - Google Gemini
 - OpenRouter
+- DeepSeek
 - Ollama
 
 Changing models normally requires only the provider and model ID. The
 bridge resolves a conservative capability profile for OpenAI-compatible
-targets, including direct OpenAI, Google, OpenRouter, and Ollama. Known
+targets, including direct OpenAI, Google, OpenRouter, DeepSeek, and
+Ollama. Known
 sampling models receive `temperature`; known reasoning models receive
 their supported token-limit shape and configured reasoning effort;
 unrecognized direct OpenAI models start without optional parameters.
@@ -633,6 +635,25 @@ LLMChatter.OpenRouter.MaxTokensMultiplier = 5
 not reduce reasoning-token usage or cost. The multiplier is ignored
 when the effort is empty or `none`. OpenRouter effort values are passed
 through without client-side validation because support varies by model.
+
+```ini
+LLMChatter.Provider = deepseek
+LLMChatter.Model = deepseek-flash
+LLMChatter.DeepSeek.ApiKey = sk-xxxxx
+LLMChatter.DeepSeek.DisableThinking = 1
+```
+
+DeepSeek models think by default, so `DeepSeek.DisableThinking = 1`
+sends `thinking = {"type": "disabled"}` in the request body to turn it
+off. The bridge never sends `reasoning_effort` to DeepSeek: there that
+parameter takes `low/high/max` and controls how hard the model thinks
+rather than whether it thinks, and a rejected `none` would be read by
+the compatibility layer as a model forcing default reasoning, which
+permanently drops `temperature` for the rest of the process.
+
+Current model IDs are `deepseek-flash` and `deepseek-v4-pro`. The legacy
+name `deepseek-v4-flash` is still accepted but routes to, and bills as,
+`deepseek-flash`.
 
 ```ini
 LLMChatter.Provider = ollama

@@ -39,6 +39,7 @@ GOOGLE_OPENAI_BASE_URL = (
     'https://generativelanguage.googleapis.com/v1beta/openai/'
 )
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 
 # -----------------------------------------------------------
 # Vision prompt — Stage 1 (pure extraction, no personality)
@@ -175,6 +176,11 @@ def load_screenshot_config(raw: dict) -> dict:
             'LLMChatter.OpenRouter.HttpReferer', ''),
         'openrouter_title': raw.get(
             'LLMChatter.OpenRouter.Title', ''),
+        'deepseek_api_key': raw.get(
+            'LLMChatter.DeepSeek.ApiKey', ''),
+        'deepseek_base_url': raw.get(
+            'LLMChatter.DeepSeek.BaseUrl',
+            DEEPSEEK_BASE_URL),
         # Host-side override: Database.Host is typically a
         # Docker-internal hostname (e.g. ac-database) which
         # the Windows host can't resolve. Screenshot.DBHost
@@ -353,6 +359,12 @@ def _call_openai(
         max_tokens,
         reasoning_effort=reasoning_effort,
     ))
+    if provider == 'deepseek':
+        # DeepSeek thinks by default; hidden reasoning would consume the
+        # fixed extraction budget and return empty JSON.
+        request_kwargs['extra_body'] = {
+            'thinking': {'type': 'disabled'},
+        }
     resp = create_chat_completion(
         client.chat.completions.create,
         request_kwargs,
@@ -781,6 +793,11 @@ def _create_vision_client(config: dict):
         if headers:
             kwargs['default_headers'] = headers
         return openai.OpenAI(**kwargs)
+    if provider == 'deepseek':
+        import openai
+        return openai.OpenAI(
+            api_key=config['deepseek_api_key'],
+            base_url=config['deepseek_base_url'])
     else:
         import openai
         return openai.OpenAI(
@@ -855,6 +872,11 @@ def main():
         if not config['openrouter_api_key']:
             log.error(
                 "LLMChatter.OpenRouter.ApiKey not set")
+            sys.exit(1)
+    elif provider == 'deepseek':
+        if not config['deepseek_api_key']:
+            log.error(
+                "LLMChatter.DeepSeek.ApiKey not set")
             sys.exit(1)
     else:
         if not config['openai_api_key']:

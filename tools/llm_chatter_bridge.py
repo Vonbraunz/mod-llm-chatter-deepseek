@@ -31,7 +31,9 @@ import openai
 import chatter_ambient
 
 from chatter_constants import (
+    DEEPSEEK_BASE_URL,
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_GOOGLE_MODEL,
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OPENROUTER_MODEL,
@@ -1282,6 +1284,8 @@ def main():
         default_model = DEFAULT_GOOGLE_MODEL
     elif provider == 'openrouter':
         default_model = DEFAULT_OPENROUTER_MODEL
+    elif provider == 'deepseek':
+        default_model = DEFAULT_DEEPSEEK_MODEL
     model = config.get(
         'LLMChatter.Model', default_model
     )
@@ -1349,6 +1353,19 @@ def main():
         if headers:
             kwargs['default_headers'] = headers
         client = openai.OpenAI(**kwargs)
+    elif provider == 'deepseek':
+        api_key = config.get(
+            'LLMChatter.DeepSeek.ApiKey', ''
+        )
+        if not api_key:
+            sys.exit(1)
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url=config.get(
+                'LLMChatter.DeepSeek.BaseUrl',
+                DEEPSEEK_BASE_URL,
+            ),
+        )
     else:
         # Anthropic (default)
         api_key = config.get(
@@ -1415,7 +1432,8 @@ def main():
         f"Model: {model}"
     )
     if provider in (
-        'openai', 'google', 'openrouter', 'ollama'
+        'openai', 'google', 'openrouter', 'ollama',
+        'deepseek',
     ):
         logger.info(
             "Model compatibility: %s",
@@ -1423,6 +1441,13 @@ def main():
                 provider,
                 model,
                 compatible_reasoning_effort(provider, config),
+            ),
+        )
+    if provider == 'deepseek':
+        logger.info(
+            "DeepSeek URL: %s",
+            config.get(
+                'LLMChatter.DeepSeek.BaseUrl', DEEPSEEK_BASE_URL
             ),
         )
     if provider == 'ollama':
