@@ -1204,6 +1204,22 @@ def _prepare_snapshot_dir(snapshot_dir):
 # =============================================================================
 # MAIN
 # =============================================================================
+# DeepSeek bills double during 01:00-04:00 and 06:00-10:00 UTC. Ambient bot
+# chatter is not worth paying 2x for, so the bridge goes quiet inside those
+# windows and picks back up on its own. Set LLMChatter.PeakHours.Skip = 0 to
+# ignore the windows and generate around the clock.
+DEEPSEEK_PEAK_WINDOWS_UTC = ((1, 4), (6, 10))
+
+
+def is_deepseek_peak(now=None):
+    """True when the current UTC hour falls in a DeepSeek 2x billing window."""
+    from datetime import datetime, timezone
+
+    moment = now or datetime.now(timezone.utc)
+    hour = moment.hour
+    return any(start <= hour < end for start, end in DEEPSEEK_PEAK_WINDOWS_UTC)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='LLM Chatter Bridge'
@@ -1406,6 +1422,13 @@ def main():
     group_chatter_enabled = (
         config.get(
             'LLMChatter.GroupChatter.Enable', '1'
+        ) == '1'
+    )
+
+    # Skip LLM generation during DeepSeek's 2x billing windows.
+    peak_hours_skip = (
+        config.get(
+            'LLMChatter.PeakHours.Skip', '1'
         ) == '1'
     )
     priority_bridge_yield = _priority_bridge_yield_enabled(
@@ -1991,6 +2014,7 @@ def main():
     tone_regen_future = None
     # Track online→offline transition for full wipe
     was_players_online = True
+    peak_blocked_last = False
 
     def _harvest_future(f, name):
         """Consume any unexpected worker failure."""
@@ -2086,6 +2110,29 @@ def main():
                     any_real_players_online(db)
                 )
 
+                # Peak-hours gate. Deliberately separate from
+                # players_online so it never trips the online ->
+                # offline transition below, which wipes session
+                # data; we want to pause spending, not forget
+                # everyone's bot memories.
+                peak_blocked = (
+                    peak_hours_skip and is_deepseek_peak()
+                )
+                if peak_blocked != peak_blocked_last:
+                    if peak_blocked:
+                        logger.info(
+                            "DeepSeek peak billing window "
+                            "active - pausing LLM generation "
+                            "until it ends"
+                        )
+                    else:
+                        logger.info(
+                            "DeepSeek peak window over - "
+                            "resuming LLM generation"
+                        )
+                    peak_blocked_last = peak_blocked
+                work_allowed = players_online and not peak_blocked
+
                 # Transition online → offline: wipe
                 # all ephemeral session data once
                 if (
@@ -2144,7 +2191,7 @@ def main():
 
                 # Legacy requests (General ambient chatter)
                 # Runs freely every cycle — no deferral
-                if players_online and not legacy_future:
+                if work_allowed and not legacy_future:
                     legacy_future = (
                         executor.submit(
                             _run_in_worker,
@@ -2155,7 +2202,7 @@ def main():
                     )
 
                 if (
-                    players_online
+                    work_allowed
                     and not tone_regen_future
                 ):
                     tone_regen_future = (
@@ -2169,7 +2216,7 @@ def main():
 
                 # Fetch + dispatch events
                 dispatched = 0
-                if use_event_system and players_online:
+                if use_event_system and work_allowed:
                     available = (
                         max_concurrent
                         - len(active_futures)
@@ -2233,7 +2280,7 @@ def main():
 
                 # Idle chatter -> worker pool
                 if (
-                    players_online
+                    work_allowed
                     and use_event_system
                     and group_chatter_enabled
                     and not idle_chatter_future
@@ -2253,7 +2300,7 @@ def main():
 
                 # Bot questions -> worker pool
                 if (
-                    players_online
+                    work_allowed
                     and use_event_system
                     and group_chatter_enabled
                     and not bot_question_future
@@ -2273,7 +2320,7 @@ def main():
 
                 # Pre-cache -> worker pool
                 if (
-                    players_online
+                    work_allowed
                     and precache_enabled
                     and not precache_future
                     and current_time

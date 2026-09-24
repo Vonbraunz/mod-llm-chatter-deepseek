@@ -2488,6 +2488,19 @@ LLMChatter.Bridge.InterSystemStaggerMin = 3
 LLMChatter.Bridge.InterSystemStaggerMax = 6
 
 #
+#    LLMChatter.PeakHours.Skip
+#        Description: Skip all LLM generation during DeepSeek's double-billing
+#                     windows (01:00-04:00 and 06:00-10:00 UTC). Ambient bot
+#                     chatter is not worth 2x the token cost, so the bridge
+#                     pauses inside those windows and resumes automatically
+#                     once they end. Real player messages still land in the
+#                     queue and are answered after the window closes.
+#        Default:     1 - (Enabled)
+#                     0 - (Generate around the clock)
+
+LLMChatter.PeakHours.Skip = 1
+
+#
 #   LLMChatter.MessageDelayMin
 #       Minimum delay (milliseconds) before a bot sends a
 #       message. Simulates "reading + typing" time. Applies

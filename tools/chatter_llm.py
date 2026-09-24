@@ -297,8 +297,76 @@ def build_compatible_chat_request(
     return kwargs
 
 
+# --- token usage accounting -------------------------------------------------
+# DeepSeek bills per token and charges 2x inside its peak windows, so tally
+# what the bridge actually spends and split it by window. The peak split is
+# the number that decides whether pausing during peak is worth it.
+# The window check mirrors is_deepseek_peak() in llm_chatter_bridge.py; it
+# cannot be imported from there without a circular import.
+_USAGE = {
+    'offpeak': {'calls': 0, 'prompt': 0, 'completion': 0},
+    'peak': {'calls': 0, 'prompt': 0, 'completion': 0},
+}
+_USAGE_REPORT_EVERY = 25
+_USAGE_LOCK = threading.Lock()
+
+
+def _in_peak_window():
+    from datetime import datetime, timezone
+    hour = datetime.now(timezone.utc).hour
+    return (1 <= hour < 4) or (6 <= hour < 10)
+
+
+def _record_usage(response, label=''):
+    """Tally prompt/completion tokens and log a rolling summary.
+
+    Handles both response shapes: OpenAI-compatible (prompt_tokens /
+    completion_tokens) and Anthropic (input_tokens / output_tokens).
+    """
+    usage = getattr(response, 'usage', None)
+    if usage is None:
+        return
+
+    prompt = getattr(usage, 'prompt_tokens', None)
+    completion = getattr(usage, 'completion_tokens', None)
+    if prompt is None:
+        prompt = getattr(usage, 'input_tokens', None)
+    if completion is None:
+        completion = getattr(usage, 'output_tokens', None)
+    if prompt is None or completion is None:
+        return
+
+    bucket = 'peak' if _in_peak_window() else 'offpeak'
+
+    with _USAGE_LOCK:
+        entry = _USAGE[bucket]
+        entry['calls'] += 1
+        entry['prompt'] += prompt
+        entry['completion'] += completion
+        total_calls = _USAGE['peak']['calls'] + _USAGE['offpeak']['calls']
+        report = total_calls % _USAGE_REPORT_EVERY == 0
+        peak = dict(_USAGE['peak'])
+        off = dict(_USAGE['offpeak'])
+
+    logger.debug(
+        "LLM usage (%s, %s): prompt=%d completion=%d",
+        label, bucket, prompt, completion,
+    )
+
+    if report:
+        logger.info(
+            "LLM token usage: %d calls | peak %d calls "
+            "(%d prompt + %d completion) | off-peak %d calls "
+            "(%d prompt + %d completion)",
+            total_calls,
+            peak['calls'], peak['prompt'], peak['completion'],
+            off['calls'], off['prompt'], off['completion'],
+        )
+
+
 def _extract_chat_content(response, label=''):
     """Extract text from an OpenAI-compatible chat response."""
+    _record_usage(response, label)
     choice = response.choices[0]
     message = choice.message
     content = getattr(message, 'content', None)
@@ -532,6 +600,7 @@ def call_llm(
             response = client.messages.create(
                 **kwargs
             )
+            _record_usage(response, label)
             result = response.content[0].text.strip()
     except Exception as exc:
         logger.error(
