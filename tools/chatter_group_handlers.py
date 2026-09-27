@@ -22,6 +22,8 @@ from chatter_shared import (
     parse_conversation_response,
     calculate_dynamic_delay,
     build_talent_context,
+    build_gear_context,
+    attach_speaker_gear,
     build_zone_metadata,
     build_group_travel_metadata,
     build_travel_state_from_row,
@@ -31,6 +33,8 @@ from chatter_shared import (
     brief_casual_response_fits,
     bound_brief_casual_response,
     build_brief_casual_repair_prompt,
+    is_pvp_enemy,
+    is_pvp_identity_known,
 )
 from chatter_db import (
     fail_event,
@@ -139,8 +143,61 @@ def _resolve_zone_name(
     return extra_data_zone_name or 'somewhere'
 
 
+def _pvp_kill_memory(db, ctx):
+    """Memory: the reacting bot remembers defeating a
+    named opposing-faction enemy in the open world.
+
+    Uses the same chance setting as battleground
+    PvP kill memories. Anonymous enemies are not
+    remembered because nobody saw who they were.
+    """
+    extra_data = ctx['extra_data']
+    if not is_pvp_identity_known(extra_data):
+        return
+    config = ctx['config']
+    mem_chance = int(config.get(
+        'LLMChatter.Memory'
+        '.PvPKillGenerationChance', 10
+    ))
+    if random.random() * 100 >= mem_chance:
+        return
+    enemy_name = extra_data.get('enemy_name') or ''
+    if not enemy_name:
+        return
+    try:
+        enemy_desc = ' '.join(p for p in (
+            get_race_name(
+                int(extra_data.get('enemy_race', 0))),
+            get_class_name(
+                int(extra_data.get('enemy_class', 0))),
+        ) if p)
+    except (TypeError, ValueError):
+        enemy_desc = ''
+    context = f"Defeated {enemy_name}"
+    if enemy_desc:
+        context += f", a {enemy_desc}"
+    faction = extra_data.get('enemy_faction') or ''
+    if faction:
+        context += f" of the {faction}"
+    context += ", in the open world"
+    queue_memory(
+        config, ctx['group_id'],
+        ctx['bot_guid'], 0,
+        memory_type='pvp_kill',
+        event_context=context,
+        bot_name=ctx['bot_name'],
+        bot_class=ctx['bot']['class'],
+        bot_race=ctx['bot']['race'],
+        bot_gender=ctx['bot'].get('gender', ''),
+    )
+
+
 def _kill_post_success(db, ctx, message):
-    """Memory: bots remember boss/rare kills."""
+    """Memory: bots remember boss/rare kills and
+    named overworld PvP kills."""
+    if is_pvp_enemy(ctx['extra_data']):
+        _pvp_kill_memory(db, ctx)
+        return
     is_boss = ctx['is_boss']
     is_rare = ctx['is_rare']
     if not (is_boss or is_rare):
@@ -1485,6 +1542,10 @@ def process_group_zone_transition_event(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'gear': build_gear_context(
+            db, bot_guid,
+            get_class_name(char_row['class']), config,
+        ),
     }
 
 
@@ -2288,6 +2349,7 @@ def _nearby_object_conversation(
             continue
         bots.append({
             'name': name,
+            'guid': guid,
             'class': get_class_name(
                 char['class']
             ),
@@ -2300,6 +2362,8 @@ def _nearby_object_conversation(
         # Not enough bots — fall back to skipped
         _mark_event(db, event_id, 'skipped')
         return False
+
+    attach_speaker_gear(db, bots, config)
 
     bot_names = [b['name'] for b in bots]
     num_bots = len(bots)
@@ -2545,6 +2609,8 @@ def execute_player_msg_conversation(
     if len(bots) < 2:
         return False
 
+    attach_speaker_gear(db, bots, config)
+
     bot_names = [b['name'] for b in bots]
     num_bots = len(bots)
 
@@ -2749,7 +2815,7 @@ def execute_player_msg_conversation(
 # ============================================================
 
 def _quest_conversation_pick_bots(
-    db, group_id, reactor_name, members,
+    db, group_id, reactor_name, members, config=None,
 ):
     """Pick 2-3 bots for a quest conversation.
     Reactor is always included. Returns
@@ -2798,6 +2864,7 @@ def _quest_conversation_pick_bots(
             continue
         bots.append({
             'name': name,
+            'guid': guid,
             'class': get_class_name(
                 char['class']
             ),
@@ -2808,6 +2875,8 @@ def _quest_conversation_pick_bots(
 
     if len(bots) < 2:
         return None
+
+    attach_speaker_gear(db, bots, config)
 
     return bots, traits_map, bot_guids
 
@@ -2882,7 +2951,7 @@ def _quest_complete_conversation(
     to fall back to statement path.
     """
     result = _quest_conversation_pick_bots(
-        db, group_id, reactor_name, members,
+        db, group_id, reactor_name, members, config,
     )
     if not result:
         return False
@@ -2986,7 +3055,7 @@ def _quest_objectives_conversation(
     success, False to fall back to statement path.
     """
     result = _quest_conversation_pick_bots(
-        db, group_id, reactor_name, members,
+        db, group_id, reactor_name, members, config,
     )
     if not result:
         return False
@@ -3082,7 +3151,7 @@ def _quest_accept_conversation(
     success, False to fall back to statement path.
     """
     result = _quest_conversation_pick_bots(
-        db, group_id, reactor_name, members,
+        db, group_id, reactor_name, members, config,
     )
     if not result:
         return False
