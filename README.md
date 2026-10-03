@@ -493,8 +493,8 @@ LLMChatter.Screenshot.Chance = 90
 # Options: "openai" (recommended), "anthropic", "google", "openrouter", or "deepseek"
 LLMChatter.Screenshot.VisionProvider = openai
 
-# Which model to use. GPT-4o-mini is fast and very cheap
-LLMChatter.Screenshot.VisionModel = gpt-4o-mini
+# Which model to use. GPT-6 Luna is fast, cheap, and good at vision
+LLMChatter.Screenshot.VisionModel = gpt-6-luna
 
 # Chance (1-100) that a screenshot triggers a multi-bot
 # conversation instead of a single comment. Default: 40
