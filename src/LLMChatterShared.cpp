@@ -1113,7 +1113,7 @@ bool IsPlayerBot(Player* player)
         return false;
 
     WorldSession* session = player->GetSession();
-    if (session && session->IsBot())
+    if (session && session->IsHeadless())
         return true;
 
     PlayerbotAI* ai = GET_PLAYERBOT_AI(player);
@@ -1122,7 +1122,7 @@ bool IsPlayerBot(Player* player)
 
     // During playerbot login, the synthetic bot
     // WorldSession exists before PlayerbotAI master
-    // state is always available. Session::IsBot()
+    // state is always available. Session::IsHeadless()
     // handles that timing window. A user-controlled
     // self-bot uses a real client session and sets
     // master == bot, so IsSelfBot() keeps it in
@@ -1727,7 +1727,7 @@ bool CanSpeakInGeneralChannel(Player* bot)
             == std::string::npos)
             continue;
 
-        return bot->IsInChannel(channel);
+        return channel->IsOn(bot->GetGUID());
     }
 
     return false;
