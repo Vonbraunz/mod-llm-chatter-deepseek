@@ -83,12 +83,17 @@ from chatter_shared import (
     bound_brief_casual_response,
     build_brief_casual_repair_prompt,
 )
+from chatter_guild_profile import (
+    get_character_guild_name,
+    same_guild_note,
+)
 from chatter_db import (
     get_character_info_by_name,
     get_group_location,
     is_player_online,
 )
 from chatter_party_gate import should_defer_party_generation
+from chatter_player_context import player_context_text
 from chatter_mode import (
     build_player_chat_guidance,
     build_player_prompt_header_from_dict,
@@ -122,6 +127,11 @@ from chatter_threads import (
     record_idle_exchange,
     render_for_player_reply,
     report_tokens,
+)
+from chatter_themed_topics import (
+    themed_candidate,
+    themed_metadata,
+    themed_used,
 )
 from chatter_group_state import (
     set_group_chat_history_limit,
@@ -165,6 +175,7 @@ from chatter_memory import (
     start_session,
     queue_memory,
     get_bot_memories,
+    memory_recall_count,
     flush_session_memories,
     sanitize_memory_for_prompt,
     _get_group_lock,
@@ -635,6 +646,9 @@ def process_group_event(db, client, config, event):
         'gender': get_gender_label(
             int(extra_data.get('bot_gender', 0))
         ),
+        'guild_name': get_character_guild_name(
+            db, bot_guid
+        ),
         'gear': build_gear_context(
             db, bot_guid, bot_class, config,
         ),
@@ -719,7 +733,7 @@ def process_group_event(db, client, config, event):
             if player_guid:
                 memories = get_bot_memories(
                     db, bot_guid, player_guid,
-                    count=3,
+                    count=memory_recall_count(config),
                 )
                 player_name_known = bool(memories)
                 recall_chance = int(config.get(
@@ -881,6 +895,9 @@ def process_group_event(db, client, config, event):
             stored_tone=stored_tone,
             map_id=greet_map_id,
             zone_id=greet_zone_id,
+            player_context=player_context_text(
+                db, extra_data.get('player_guid'), player_name, mode,
+            ),
         )
 
         # 3. Call LLM
@@ -1135,6 +1152,9 @@ def process_group_join_batch_event(
                 'gender': get_gender_label(
                     int(bot_raw.get('bot_gender', 0))
                 ),
+                'guild_name': get_character_guild_name(
+                    db, bot_guid
+                ),
                 'gear': build_gear_context(
                     db, bot_guid, bot_class, config,
                 ),
@@ -1198,7 +1218,7 @@ def process_group_join_batch_event(
                     bot_memories = get_bot_memories(
                         db, bot_guid,
                         batch_player_guid,
-                        count=3,
+                        count=memory_recall_count(config),
                     )
                     bot_player_known = bool(
                         bot_memories
@@ -1369,6 +1389,10 @@ def process_group_join_batch_event(
                     map_id=pm or 0,
                     zone_id=pz or 0,
                     bg_context=_bg_ctx,
+                    player_context=player_context_text(
+                        db, extra_data.get('player_guid'),
+                        player_name, mode,
+                    ),
                 )
 
             # 3. Call LLM
@@ -1645,6 +1669,9 @@ def _batch_welcome(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'guild_name': get_character_guild_name(
+            db, wb_guid
+        ),
         'gear': build_gear_context(
             db, wb_guid,
             get_class_name(char_row['class']), config,
@@ -1852,6 +1879,9 @@ def process_group_player_msg_event(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'guild_name': get_character_guild_name(
+            db, bot_guid
+        ),
         'gear': build_gear_context(
             db, bot_guid,
             get_class_name(char_row['class']), config,
@@ -2050,7 +2080,8 @@ def process_group_player_msg_event(
             ):
                 msg_memories = get_bot_memories(
                     db, bot_guid,
-                    player_guid, count=3,
+                    player_guid,
+                    count=memory_recall_count(config),
                     exclude_first_meeting=True,
                 )
                 if not msg_memories:
@@ -2074,6 +2105,15 @@ def process_group_player_msg_event(
             brief_casual=brief_casual,
             bg_context=extra_data,
             allow_action=not brief_casual,
+            guild_note=same_guild_note(
+                db, bot_guid,
+                player_info['guid'] if player_info else 0,
+                player_name,
+            ),
+            player_context=player_context_text(
+                db, player_info['guid'] if player_info else 0,
+                player_name, mode,
+            ),
             thread_context=render_for_player_reply(
                 group_id, db
             ),
@@ -2430,6 +2470,9 @@ def _try_second_bot_response(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'guild_name': get_character_guild_name(
+            db, bot2_guid
+        ),
         'gear': build_gear_context(
             db, bot2_guid,
             get_class_name(char_row['class']), config,
@@ -2484,6 +2527,15 @@ def _try_second_bot_response(
         map_id=map_id,
         stored_tone=bot2_tone,
         travel_context=bot2_travel_context,
+        guild_note=same_guild_note(
+            db, bot2_guid,
+            player_info['guid'] if player_info else 0,
+            player_name,
+        ),
+        player_context=player_context_text(
+            db, player_info['guid'] if player_info else 0,
+            player_name, mode,
+        ),
         thread_context=render_for_player_reply(group_id, db),
         backstory=party_reaction_backstory(
             config, second.get('backstory'), mode,
@@ -2583,6 +2635,9 @@ def _welcome_from_existing_bot(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'guild_name': get_character_guild_name(
+            db, wb_guid
+        ),
         'gear': build_gear_context(
             db, wb_guid,
             get_class_name(char_row['class']), config,
@@ -3016,6 +3071,7 @@ def build_idle_chatter_prompt(
     travel_context='',
     persona=None,
     thread_turn=None,
+    themed_topic='',
 ):
     """Build prompt for idle party chat.
 
@@ -3036,6 +3092,8 @@ def build_idle_chatter_prompt(
             exchange; adds the thread context and asks
             for the optional thread report (normal path
             only; the memory path keeps its own focus)
+        themed_topic: optional themed subject used while
+            threads are off (outside instances)
     """
     is_rp = (mode == 'roleplay')
     if persona is None:
@@ -3339,6 +3397,11 @@ def build_idle_chatter_prompt(
         if topic else
         "You're in a party."
     )
+    if themed_topic and topic:
+        party_ctx = (
+            "You're in a party. A possible subject, only if "
+            f"it fits naturally: {themed_topic}"
+        )
     continuing = bool(
         thread_turn and thread_turn.builds_on_subject
     )
@@ -4317,6 +4380,9 @@ def _idle_single_statement(
         'race': get_race_name(char_row['race']),
         'level': char_row['level'],
         'gender': get_gender_label(char_row['gender']),
+        'guild_name': get_character_guild_name(
+            db, bot_guid
+        ),
         'gear': build_gear_context(
             db, bot_guid,
             get_class_name(char_row['class']), config,
@@ -4409,7 +4475,10 @@ def _idle_single_statement(
                 if player_guid:
                     idle_memories = get_bot_memories(
                         db, bot_guid,
-                        player_guid, count=2,
+                        player_guid,
+                        count=memory_recall_count(
+                            config, idle=True
+                        ),
                         exclude_first_meeting=True,
                     )
                     if not idle_memories:
@@ -4431,13 +4500,22 @@ def _idle_single_statement(
     # recalls keep their own focus, so they neither
     # see nor consume the thread.
     thread_turn = None
+    themed = None
     if not idle_memories:
+        if not _in_instance(map_id):
+            themed = themed_candidate(
+                db, config, 'party', bot,
+                thread_key=group_id, mode=mode,
+            )
         thread_turn = plan_idle_turn(
             group_id, [bot_name],
             in_instance=_in_instance(map_id),
             topic_pool=_ambient_topic_pool(mode),
             db=db,
+            themed_topic=themed.render() if themed else None,
         )
+        if not themed_used(themed, thread_turn):
+            themed = None
 
     try:
         speaker_talent = _maybe_talent_context(
@@ -4462,6 +4540,10 @@ def _idle_single_statement(
             backstory=idle_backstory,
             travel_context=travel_context,
             thread_turn=thread_turn,
+            themed_topic=(
+                themed.render()
+                if themed and thread_turn is None else ''
+            ),
         )
 
         _dflav = get_dungeon_flavor(map_id)
@@ -4496,6 +4578,7 @@ def _idle_single_statement(
             )
         zone_meta['channel'] = 'party'
         zone_meta['bot_name'] = bot_name
+        zone_meta.update(themed_metadata(themed))
         zone_meta.update(build_travel_metadata(
             travel_state,
             travel_context,
@@ -4637,6 +4720,9 @@ def _idle_conversation(
             'race': get_race_name(char['race']),
             'level': char['level'],
             'gender': get_gender_label(char['gender']),
+            'guild_name': get_character_guild_name(
+                db, br['bot_guid']
+            ),
             'gear': build_gear_context(
                 db, br['bot_guid'],
                 get_class_name(char['class']), config,
@@ -4729,7 +4815,9 @@ def _idle_conversation(
                         mems = get_bot_memories(
                             db, b['guid'],
                             player_guid,
-                            count=2,
+                            count=memory_recall_count(
+                                config, idle=True
+                            ),
                             exclude_first_meeting=(
                                 True
                             ),
@@ -4743,15 +4831,29 @@ def _idle_conversation(
     # replaces the random pool topic. Memory
     # exchanges keep their own focus.
     thread_turn = None
+    themed = None
     if not memories_map:
+        if not _in_instance(map_id):
+            themed = themed_candidate(
+                db, config, 'party', bots[0],
+                thread_key=group_id, mode=mode,
+            )
         thread_turn = plan_idle_turn(
             group_id, bot_names,
             in_instance=_in_instance(map_id),
             topic_pool=_ambient_topic_pool(mode),
             db=db,
+            themed_topic=themed.render() if themed else None,
         )
+        if not themed_used(themed, thread_turn):
+            themed = None
         if thread_turn is not None:
             topic = None
+        elif themed:
+            topic = (
+                f"something {bots[0]['name']} might bring up, "
+                f"if it fits naturally: {themed.render()}"
+            )
 
     # RNG-gate backstory injection per bot
     conv_backstory_map = None
@@ -4844,6 +4946,7 @@ def _idle_conversation(
             )
         zone_meta['channel'] = 'party'
         zone_meta['bot_name'] = ','.join(bot_names)
+        zone_meta.update(themed_metadata(themed))
         zone_meta['bot_count'] = num_bots
         zone_meta.update(build_group_travel_metadata(bots))
         if memories_map:
@@ -5188,6 +5291,9 @@ def check_bot_questions(db, client, config):
             ),
             'level': char_row['level'],
             'gender': get_gender_label(char_row['gender']),
+            'guild_name': get_character_guild_name(
+                db, bot_guid
+            ),
             'gear': build_gear_context(
                 db, bot_guid,
                 get_class_name(char_row['class']),
@@ -5264,7 +5370,8 @@ def check_bot_questions(db, client, config):
                 question_memories = (
                     get_bot_memories(
                         db, bot_guid,
-                        p_guid, count=3,
+                        p_guid,
+                        count=memory_recall_count(config),
                         exclude_first_meeting=True,
                     )
                 )
@@ -5289,6 +5396,14 @@ def check_bot_questions(db, client, config):
             area_id=area_id,
             stored_tone=stored_tone,
             memories=question_memories or None,
+            player_context=player_context_text(
+                db,
+                (get_character_info_by_name(db, player_name) or {}).get(
+                    'guid', 0),
+                player_name, mode,
+                race=player_race, class_name=player_class,
+                gender=player_gender,
+            ),
         )
 
         max_tokens = int(config.get(

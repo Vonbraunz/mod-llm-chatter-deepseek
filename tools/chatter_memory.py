@@ -651,7 +651,7 @@ def _call_llm_for_memory(
             "earning an achievement"
         ),
         'level_up': (
-            "reaching a new level"
+            "growing noticeably stronger"
         ),
         'bg_win': (
             "winning a battleground"
@@ -1123,6 +1123,24 @@ def rehydrate_active_sessions(db):
 # ============================================================
 # MEMORY RETRIEVAL
 # ============================================================
+
+def memory_recall_count(config, idle=False):
+    """How many memories one prompt retrieves.
+
+    LLMChatter.Memory.RecallCount covers greetings, replies to the
+    player and bot questions; IdleRecallCount covers idle chatter.
+    Clamped to 1-10.
+    """
+    key, default = (
+        ('LLMChatter.Memory.IdleRecallCount', 2) if idle
+        else ('LLMChatter.Memory.RecallCount', 3)
+    )
+    try:
+        count = int(config.get(key, default))
+    except (TypeError, ValueError):
+        count = default
+    return max(1, min(10, count))
+
 
 def get_bot_memories(
     db, bot_guid, player_guid, count=3,

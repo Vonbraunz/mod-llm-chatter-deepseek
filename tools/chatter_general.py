@@ -66,11 +66,13 @@ from chatter_persona import (
     build_persona_block,
     persona_from_fields,
 )
+from chatter_guild_profile import get_character_guild_name
 from chatter_mode import (
     build_player_chat_guidance,
     build_player_identity,
 )
 from chatter_constants import (
+    ALLIANCE_RACE_IDS, HORDE_RACE_IDS,
     RACE_SPEECH_PROFILES,
     LENGTH_HINTS, RP_LENGTH_HINTS,
 )
@@ -169,12 +171,15 @@ def _get_general_chat_history(
     if limit is None:
         limit = _chat_history_limit
     cursor = db.cursor(dictionary=True)
-    if faction == 'Alliance':
-        race_filter = 'AND c.race IN (1, 3, 4, 7, 11)'
-    elif faction == 'Horde':
-        race_filter = 'AND c.race IN (2, 5, 6, 8, 10)'
-    else:
-        race_filter = ''
+    race_ids = {
+        'Alliance': ALLIANCE_RACE_IDS,
+        'Horde': HORDE_RACE_IDS,
+    }.get(faction)
+    race_filter = (
+        'AND c.race IN ('
+        + ', '.join(str(i) for i in race_ids) + ')'
+        if race_ids else ''
+    )
     # Faction-scoped history fails closed: a speaker whose
     # character row cannot establish a faction is not prompt context.
     character_join = (
@@ -473,6 +478,7 @@ def _build_general_response_prompt(
     subzone_name="",
     subzone_lore="",
     brief_casual=False,
+    guild_name="",
     thread_context="",
     brief_tier=None,
     reply_length_hint=None,
@@ -530,6 +536,7 @@ def _build_general_response_prompt(
         bot_level,
         bot_gender,
         mode,
+        guild_name=guild_name,
     )
     prompt = (
         f"{identity}\n"
@@ -638,6 +645,7 @@ def _build_general_followup_prompt(
     subzone_name="",
     subzone_lore="",
     brief_casual=False,
+    guild_name="",
     brief_tier=None,
     reply_length_hint=None,
 ):
@@ -695,6 +703,7 @@ def _build_general_followup_prompt(
         bot_level,
         bot_gender,
         mode,
+        guild_name=guild_name,
     )
     prompt = (
         f"{identity}\n"
@@ -981,6 +990,9 @@ def process_general_player_msg_event(
             subzone_name=subzone_name,
             subzone_lore=subzone_lore,
             brief_casual=brief_casual,
+            guild_name=get_character_guild_name(
+                db, bot1_guid
+            ),
             thread_context=thread_context,
             brief_tier=brief_tier1,
             reply_length_hint=general_reply_length_line(config, reply_tier1),
@@ -1293,6 +1305,9 @@ def _general_followup(
         subzone_name=subzone_name,
         subzone_lore=subzone_lore,
         brief_casual=brief_casual,
+        guild_name=get_character_guild_name(
+            db, bot2_guid
+        ),
         brief_tier=brief_tier2,
         reply_length_hint=general_reply_length_line(config, reply_tier2),
     )
@@ -1427,6 +1442,7 @@ def _build_general_continuation_prompt(
     zone_flavor="",
     subzone_name="",
     subzone_lore="",
+    guild_name="",
     reply_length_hint=None,
 ):
     """Build prompt for a continuation message in
@@ -1498,6 +1514,7 @@ def _build_general_continuation_prompt(
         bot_level,
         bot_gender,
         mode,
+        guild_name=guild_name,
     )
     prompt = (
         f"{identity}\n"
@@ -1758,6 +1775,9 @@ def _general_extended_conversation(
             zone_flavor=zone_flavor,
             subzone_name=subzone_name,
             subzone_lore=subzone_lore,
+            guild_name=get_character_guild_name(
+                db, speaker['guid']
+            ),
         )
 
         if zone_meta is None:
